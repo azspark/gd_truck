@@ -2,12 +2,22 @@ import pandas as pd
 import folium
 from .utils import *
 from .road_node import RoadNode
+from .node_set import NodeSet
 from typing import List, Tuple, Dict, Set, Union
 
 class RoadNetwork(object):
 
-    def __init__(self, rn_path, sep='|', check_node_consistency=False):
+    def __init__(self, rn_path, sep='|', check_node_consistency=False, change_value=False):
+        """Extract intersection information on road network
+        
+        Args:
+            change_value: if True, replace 
+        """
         self.df_road_net = pd.read_csv(rn_path, sep=sep, converters={'geom': parse_geom})
+
+        if change_value:
+            self.df_road_net['highway'] = self.df_road_net['highway'].str.replace('_link','')
+
         self.nodes = {}
         self.highway_intersection_ids = set()
         self._init_nodes(self.df_road_net, check_node_consistency)
@@ -33,7 +43,7 @@ class RoadNetwork(object):
             self.highway_intersection_ids.add(idx)
 
     def get_highway_intersections_coords(self, lon_first: bool=False) -> List[List[float]]:
-        coords = [self.nodes[idx].get_coord(lon_first) for idx in self.highway_intersection_ids]
-        node_ids = [self.nodes[idx].idx for idx in self.highway_intersection_ids]
-        return coords, node_ids
+        return NodeSet(self.get_nodes(self.highway_intersection_ids))
     
+    def get_nodes(self, node_idxs):
+        return [self.nodes[idx] for idx in node_idxs]

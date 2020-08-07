@@ -6,7 +6,7 @@ from geopy.distance import distance
 class RoadNode(object):
 
     def __init__(self, idx, lon, lat):
-        assert lon >= -180.0 and lon < 180.0, "Node longitude is not set properly"
+        assert lon >= -180.0 and lon <= 180.0, "Node longitude is not set properly"
         assert lat >= -90.0 and lat <= 90.0, "Node latitude is not set properly"        
         self.idx = idx
         self.lon = lon 
@@ -36,15 +36,22 @@ class RoadNode(object):
         assert np.abs(new_lat - self.lat) < 1e-6
 
     @property
-    def connected_road_num(self):
+    def connected_road_num(self) -> int:
         return len(self.node_connected_type)
 
     @property
-    def connection_type(self):
-        pass
+    def connection_type(self) -> str:
+        """Node's connected waytypes, used for analyse all types ratio"""
+        # Sort the waytypes so that each connection type have a unique string repr
+        waytypes = sorted(list(set(self.node_connected_type.values())))
+        return '+'.join(waytypes)
 
     def __repr__(self):
         return super().__repr__()
 
-    def distance_to(self, node) -> float:
-        return distance(self.get_coord(False), node.get_coord(False)).meters
+    def distance_to_node(self, node) -> float:
+        return self.distance_to_coord(node.get_coord(False))
+
+    def distance_to_coord(self, coord):
+        # coord should be [lat, lon]
+        return distance(self.get_coord(False), coord).meters
