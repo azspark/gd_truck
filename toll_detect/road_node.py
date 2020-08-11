@@ -18,7 +18,7 @@ class RoadNode(object):
     def update_connect_road_type(self, way_type: str, idx: int) -> bool:
         if idx not in self.node_connected_type:
             self.node_connected_type[idx] = way_type
-            if way_type == 'motorway' or way_type == 'trunk':
+            if way_type == 'motorway':
                 self.connect_to_highway = True
             else:
                 self.connect_to_normalway = True
@@ -54,4 +54,4 @@ class RoadNode(object):
 
     def distance_to_coord(self, coord):
         # coord should be [lat, lon]
-        return distance(self.get_coord(False), coord).meters
+        return distance(self.get_coord(False), coord).meters 
