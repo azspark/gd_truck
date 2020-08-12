@@ -28,6 +28,8 @@ def parse_time(time_str: str) -> int:
         time_str = str(time_str) + '.0'
     return int(time.mktime(datetime.strptime(time_str, "%Y-%m-%d %H:%M:%S.%f").timetuple()))
 
+def values2list(values):
+    return [ele for ele in values]
 
 if __name__ == "__main__":
     """sanity check"""
