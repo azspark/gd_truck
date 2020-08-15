@@ -1,10 +1,11 @@
 import numpy as np
 import pandas as pd
 from sklearn.neighbors import BallTree
-from geopy.distance import distance
+import geopy.distance
 from .cluster_set import ClusterSet
 from .node_set import NodeSet
 from .utils import parse_position
+from sklearn.cluster import DBSCAN
 import folium
 
 
@@ -34,15 +35,110 @@ def plot_toll_with_neareast_intersection_node(node_set, toll_set,
 
 class POITolls(ClusterSet):
 
-    def __init__(self, poi_toll_path):
+    def __init__(self, poi_toll_path, highway_intersection_node_set=None, mortorway_nodes_coords=None):
+        """Class of Tolls
+        
+        Args:
+            poi_toll_path: str, downloaded from JUST
+            highway_intersection_node_set: If None, it's for toll analysis, if not, it will
+            probably find all the real toll position within given data.
+            mortorway_nodes_coords: 
+        """
         self.df_toll = pd.read_csv(poi_toll_path, sep='|', converters={'position': parse_position})
 
-    def nearest_nodes(self, node_set, k, return_distance=False):
+        self.toll_coords_list = []
+        self.toll_coords_name = []
+        self.class_of_each_toll = []
+        self.toll_class_to_idx = {}
+        if highway_intersection_node_set is not None:
+            filtered_coords, filtered_coords_idx_in_df = self._init_coords_and_filter_abnormal_toll(highway_intersection_node_set)
+            print('Number of filtered coords at first round', len(filtered_coords))
+            readded_coords, readded_coords_name = self._refilter_the_toll(filtered_coords, filtered_coords_idx_in_df, mortorway_nodes_coords)
+            self.readded_coords = readded_coords
+            print('Number of readded coords:',len(readded_coords))
+            self.toll_coords_list += readded_coords
+            self.toll_coords_name += readded_coords_name
+            self._group_adjecent_toll()
+            
+    def _init_coords_and_filter_abnormal_toll(self, highway_intersection_node_set, dis_threshold=850):
+        self.toll_coords_list = highway_intersection_node_set.coords(False)  # First part of toll coords, which is road intersection
+        self.toll_coords_name = ['unknow' for i in range(len(self.toll_coords_list))]
+        indexs, distances_to_neareast_node = self.nearest_nodes(highway_intersection_node_set, 1, True, True)
+
+        toll_data_coords = self.get_coords() # coords in given file, not from road network
+        filtered_coords = []
+        filtered_coords_idx_in_df = []
+        i = 0
+        for idx, dis in zip(indexs, distances_to_neareast_node):
+            if dis < dis_threshold:
+                self.toll_coords_name[idx] = self.df_toll.loc[i, 'poi_name']
+            else:
+                filtered_coords.append(toll_data_coords[i])
+                filtered_coords_idx_in_df.append(i)
+            i += 1
+        return filtered_coords, filtered_coords_idx_in_df
+
+    def _refilter_the_toll(self, filtered_coords, filtered_coords_idx_in_df, mortorway_nodes_coords):
+        readded_coords = []
+        readded_coords_name = []
+
+        motorway_tree = BallTree(np.array(mortorway_nodes_coords), leaf_size=20, metric='haversine')
+        indexs = motorway_tree.query(filtered_coords, k=1, return_distance=False)
+        indexs = [i for row in indexs for i in row]
+
+        for mortorway_coord_idx, refiltering_coord, refiltering_coord_idx_in_df in zip(indexs, filtered_coords, filtered_coords_idx_in_df):
+            neareast_motorway_coord = mortorway_nodes_coords[mortorway_coord_idx]
+            distances_to_neareast_node = geopy.distance.distance(neareast_motorway_coord, refiltering_coord).meters
+            if distances_to_neareast_node < 200:
+                readded_coords.append(refiltering_coord)
+                readded_coords_name.append(self.df_toll.loc[refiltering_coord_idx_in_df, 'poi_name'])
+
+        return readded_coords, readded_coords_name
+
+    def _group_adjecent_toll(self):
+        """Group adjecent tolls into one class"""
+        dbscan = DBSCAN(eps=0.002, min_samples=2, 
+            metric='haversine', algorithm='ball_tree', leaf_size=5).fit(self.toll_coords_list)
+        labels = dbscan.labels_
+        self.class_of_each_toll = labels
+        class_id = len(set(labels)) - 1  # noise point is labeled -1
+        self.grouped_class_num = class_id
+        # fill self.toll_class_to_idx with grouped idx
+        for c in range(class_id):
+            self.toll_class_to_idx[c] = list(np.where(labels == c))
+        # Each noise point will have it's own class
+        for i in range(len(self.class_of_each_toll)):
+            if self.class_of_each_toll[i] == -1:
+                self.class_of_each_toll[i] = class_id
+                self.toll_class_to_idx[class_id] = [i]
+                class_id += 1
+        
+
+    def visualize_tolls(self, idx_range=None, diff_grouped=False):
+        """Visualize the tolls on folium map
+        
+        Args:
+            limits: int, number of shown tolls
+            diff_grouped: bool, if True, grouped toll will be shown in different color
+        """
+        if idx_range is None:
+            idx_range = np.arange(len(self.toll_coords_list))
+        m = folium.Map(self.toll_coords_list[0], zoom_start=12)
+        for i in idx_range:
+            if diff_grouped and self.class_of_each_toll[i] < self.grouped_class_num:  # have adjecent tolls
+                color = 'orange'
+            else:
+                color = 'blue'
+            popup_str = 'poi class: ' + str(self.class_of_each_toll[i]) + ', origin idx:' + str(i)
+            folium.Marker(self.toll_coords_list[i], icon=folium.Icon(color=color), popup=popup_str).add_to(m)
+        return m
+
+    def nearest_nodes(self, node_set, k, return_distance=False, return_origin_indx=False):
         """Find the neareast nodes of each given POI_Toll
 
         Args:
             node_set: NodeSet object
-            k: k neareast nodes  # TODO: doesn't support k > 1 for now
+            k: k neareast nodes  # TODO: doesn't support k > 1 for now. -> No need to support k>1
             with_distance: whether return the distacne between Toll and it's neareast node.
         Returns:
             neareaset_node_set: NodeSet, in order to analyse neareast node attributes
@@ -64,13 +160,20 @@ class POITolls(ClusterSet):
                 distances_to_neareast_node = [n.distance_to_coord(tc) for n, tc in zip(neareaset_node_list, toll_coords)]
             else:
                 distances_to_neareast_node = None
-            return neareaset_node_set, distances_to_neareast_node
+            if not return_origin_indx:
+                return neareaset_node_set, distances_to_neareast_node
+            else:
+                return [i for row in indexs for i in row], distances_to_neareast_node
         else:
             return neareaset_node_set
     
     def get_coords(self):
-        """coords of each toll"""
+        """coords of each toll, [lat, lon]"""
         return [coord for coord in self.df_toll['position'].values]
 
+    def dis_of_two_toll(self, idx1, idx2):
+        """Used for debug"""
+        return geopy.distance.distance(self.toll_coords_list[idx1], self.toll_coords_list[idx2]).meters
+
     def __getitem__(self, idx):
-        return self.df_toll.loc[idx, 'position'], self.df_toll.loc[idx, 'poi_name']
+        return self.toll_coords_list[idx], self.toll_coords_name[idx]

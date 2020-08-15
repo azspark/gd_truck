@@ -10,6 +10,11 @@ def parse_geom(geom: str) -> List[float]:
     coords = geom.split(',')
     return [get_coords(coords[0]), get_coords(coords[-1])]
 
+def parse_full_geom(geom: str) -> List[float]:
+    geom = geom[12: -1]  # remove 'LINESTRING (' and ')'
+    coords = geom.split(',')
+    return [get_coords(c) for c in coords]
+
 def parse_position(position: str) -> List[float]:
     """Lat, Lon"""
     position = position[7:-1]

@@ -7,13 +7,18 @@ from typing import List, Tuple, Dict, Set, Union
 
 class RoadNetwork(object):
 
-    def __init__(self, rn_path, sep='|', check_node_consistency=False, change_value=False):
+    def __init__(self, rn_path, sep='|', check_node_consistency=False, change_value=True, parse_full_road=False):
         """Extract intersection information on road network
         
         Args:
             change_value: if True, replace 
+            parse_full_road: if True, will be used to get all motorway nodes.
         """
-        self.df_road_net = pd.read_csv(rn_path, sep=sep, converters={'geom': parse_geom})
+        if not parse_full_road:
+            self.df_road_net = pd.read_csv(rn_path, sep=sep, converters={'geom': parse_geom})
+        else:
+            self.df_road_net = pd.read_csv(rn_path, sep=sep, converters={'geom': parse_full_geom})
+        self.parse_full_road = parse_full_road
 
         if change_value:
             self.df_road_net['highway'] = self.df_road_net['highway'].str.replace('_link','')
@@ -26,7 +31,10 @@ class RoadNetwork(object):
         
         for idx, row in df.iterrows():
             start_id, end_id = row['start_id'], row['end_id']
-            start_coord, end_coord = row['geom']
+            if not self.parse_full_road:
+                start_coord, end_coord = row['geom']
+            else:
+                start_coord, end_coord = row['geom'][0], row['geom'][-1]
             way_type = row['highway']
             self._update_node(start_id, start_coord, way_type, end_id, check_node_consistency)
             self._update_node(end_id, end_coord, way_type, start_id, check_node_consistency)
@@ -47,3 +55,11 @@ class RoadNetwork(object):
     
     def get_nodes(self, node_idxs):
         return [self.nodes[idx] for idx in node_idxs]
+
+    def get_highway_nodes(self, lon_first=False):
+        assert self.parse_full_road, 'parse_full_road should be true to use this method'
+        motorway_values = self.df_road_net[self.df_road_net['highway'] == 'motorway']['geom'].values 
+        if lon_first:
+            return [c for r in motorway_values for c in r]
+        else:
+            return [[c[1], c[0]] for r in motorway_values for c in r]
