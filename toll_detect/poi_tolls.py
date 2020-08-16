@@ -35,7 +35,8 @@ def plot_toll_with_neareast_intersection_node(node_set, toll_set,
 
 class POITolls(ClusterSet):
 
-    def __init__(self, poi_toll_path, highway_intersection_node_set=None, mortorway_nodes_coords=None):
+    def __init__(self, poi_toll_path, highway_intersection_node_set=None, mortorway_nodes_coords=None, 
+        build_toll_tree=False):
         """Class of Tolls
         
         Args:
@@ -59,6 +60,8 @@ class POITolls(ClusterSet):
             self.toll_coords_list += readded_coords
             self.toll_coords_name += readded_coords_name
             self._group_adjecent_toll()
+            if build_toll_tree:
+                self._init_toll_coords_tree()
             
     def _init_coords_and_filter_abnormal_toll(self, highway_intersection_node_set, dis_threshold=850):
         self.toll_coords_list = highway_intersection_node_set.coords(False)  # First part of toll coords, which is road intersection
@@ -112,7 +115,9 @@ class POITolls(ClusterSet):
                 self.class_of_each_toll[i] = class_id
                 self.toll_class_to_idx[class_id] = [i]
                 class_id += 1
-        
+    
+    def _init_toll_coords_tree(self):
+        self.toll_tree = BallTree(np.array(self.toll_coords_list), leaf_size=20, metric='haversine')
 
     def visualize_tolls(self, idx_range=None, diff_grouped=False):
         """Visualize the tolls on folium map
@@ -166,9 +171,16 @@ class POITolls(ClusterSet):
                 return [i for row in indexs for i in row], distances_to_neareast_node
         else:
             return neareaset_node_set
-    
+
+    def neareast_tolls_of_coords(self, coords):
+        dises, idxs = self.toll_tree.query(coords, k=1, return_distance=True)
+        idxs = [i for row in idxs for i in row]
+        dises = [d for row in dises for d in row]
+        nearest_toll_idx = idxs[np.argmin(dises)]
+        return self.class_of_each_toll[nearest_toll_idx], self.toll_coords_list[nearest_toll_idx]
+
     def get_coords(self):
-        """coords of each toll, [lat, lon]"""
+        """coords of each toll, [lat, lon],!!Attention!!: old version api, abandoned"""
         return [coord for coord in self.df_toll['position'].values]
 
     def dis_of_two_toll(self, idx1, idx2):
@@ -177,3 +189,11 @@ class POITolls(ClusterSet):
 
     def __getitem__(self, idx):
         return self.toll_coords_list[idx], self.toll_coords_name[idx]
+
+    def get_coords_of_class(self, class_id):
+        toll_idxs = self.toll_class_to_idx[class_id][0]
+        if isinstance(toll_idxs, np.ndarray):
+            return [self.toll_coords_list[i] for i in toll_idxs]
+        else:
+            print(toll_idxs)
+            return [self.toll_coords_list[toll_idxs]]

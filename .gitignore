@@ -142,3 +142,4 @@ data/
 config.json
 download_pkl.py
 traj_analysis.ipynb
+calculate_speed.py

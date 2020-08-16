@@ -1,8 +1,9 @@
 import pandas as pd
 import numpy as np
-from warehouse_detector import WarehouseDetector
-from utils import values2list
+from .warehouse_detector import WarehouseDetector
+from .utils import values2list
 from string import digits
+from .OD import OD
 
 
 class TrajCombiner(object):
@@ -65,8 +66,8 @@ class TrajCombiner(object):
     def vis_cluster(self):
         pass
 
-    def get_OD_pairs(self):
-        pass
+    def get_OD_pairs(self, start_city, end_city):
+        return OD(self.df_combined[(self.df_combined['start_city'] == start_city) & (self.df_combined['end_city'] == end_city)].copy(deep=True))
 
     def trip_distribution(self, level):
         if level == 'city':
