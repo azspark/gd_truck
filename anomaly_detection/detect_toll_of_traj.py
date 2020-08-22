@@ -1,4 +1,4 @@
-from toll_detect.poi_tolls import POITolls
+from toll_detection.poi_tolls import POITolls
 import numpy as np
 import folium
 import geopy.distance

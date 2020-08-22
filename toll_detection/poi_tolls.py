@@ -197,3 +197,10 @@ class POITolls(ClusterSet):
         else:
             print(toll_idxs)
             return [self.toll_coords_list[toll_idxs]]
+    
+    def to_csv(self, path):
+        with open(path, 'w') as f:
+            out = ''
+            for c in self.toll_coords_list:
+                out += (str(c[0]) + ',' + str(c[1]) + '\n')
+            f.write(out)
