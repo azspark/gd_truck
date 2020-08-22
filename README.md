@@ -1,7 +1,7 @@
 # 基于货车轨迹数据的异常高速公路出入口检测
-京东城市2020城市计算夏令营课题
-demo.ipynb中有运行示例
-运行前请先配置config.json
+**京东城市2020城市计算夏令营课题**  
+demo.ipynb中有运行示例   
+运行前请先配置config.json  
 ```
 {
     "roadnetwork_path": "xxx/road_network.txt",
